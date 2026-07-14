@@ -60,6 +60,19 @@ const SEED_PROFILES: Profile[] = [];
 const SEED_DOCUMENTS: Document[] = [];
 const SEED_SHARES: Share[] = [];
 
+// RFC 4122 v4 UUID — works on HTTP and HTTPS, no native crypto.randomUUID needed
+function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    try { return crypto.randomUUID(); } catch { /* fall through */ }
+  }
+  // Polyfill using Math.random (good enough for client-side IDs)
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 // Helper to initialize LocalStorage if empty
 function initMockStorage() {
   if (typeof window === 'undefined') return;
@@ -220,20 +233,18 @@ export async function getDocument(docId: string, userId: string): Promise<{ docu
 }
 
 export async function createDocument(title: string, content: string, ownerId: string): Promise<Document> {
-  const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'doc-' + Math.random().toString(36).substr(2, 9);
+  const newId = generateUUID();
   const now = new Date().toISOString();
 
   if (isSupabaseConfigured && supabase) {
+    // Let Supabase generate the UUID server-side via DEFAULT gen_random_uuid()
     const { data, error } = await supabase
       .from('documents')
       .insert({
-        id: newId,
         title,
         content,
         owner_id: ownerId,
         is_public: false,
-        created_at: now,
-        updated_at: now,
       })
       .select()
       .single();
@@ -404,7 +415,7 @@ export async function shareDocument(docId: string, email: string, role: 'VIEW' |
     throw new Error('You cannot share a document with yourself.');
   }
 
-  const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'share-' + Math.random().toString(36).substr(2, 9);
+  const newId = generateUUID();
 
   if (isSupabaseConfigured && supabase) {
     const { data, error } = await supabase
@@ -664,7 +675,7 @@ export async function signUp(email: string, name: string, password: string): Pro
       throw new Error('An account with this email already exists. Please sign in instead.');
     }
     const newProfile: Profile = {
-      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'user-' + Math.random().toString(36).substr(2, 9),
+      id: generateUUID(),
       email: cleanEmail,
       name: name || cleanEmail.split('@')[0],
       password_hash: passwordHash,
@@ -709,7 +720,7 @@ export async function loginOrRegister(email: string, name: string): Promise<Prof
     if (existing) return existing;
 
     const newProfile: Profile = {
-      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'user-' + Math.random().toString(36).substr(2, 9),
+      id: generateUUID(),
       email: cleanEmail,
       name: name || email.split('@')[0],
     };
@@ -781,7 +792,7 @@ export async function createDocumentVersion(docId: string, title: string, conten
     const creator = profiles.find(p => p.id === userId);
 
     const newVersion: DocumentVersion = {
-      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'ver-' + Math.random().toString(36).substr(2, 9),
+      id: generateUUID(),
       document_id: docId,
       title,
       content,
